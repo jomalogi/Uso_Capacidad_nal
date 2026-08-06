@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+
+  uso_capacidad_db:
+    image: mysql:8.0
+    container_name: uso_capacidad_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ofsc_cupos
+      MYSQL_USER: ofsc_user
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "3313:3306"
+    volumes:
+      - uso_capacidad_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD","mysqladmin","ping","-h","localhost","-u","ofsc_user","-p${DB_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  uso_capacidad_web:
+    build: ./streamlit
+    container_name: uso_capacidad_web
+    restart: always
+    ports:
+      - "8503:8501"
+    environment:
+      DB_HOST: uso_capacidad_db
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PORT: 3306
+    depends_on:
+      uso_capacidad_db:
+        condition: service_healthy
+
+volumes:
+  uso_capacidad_data:
+    name: uso_capacidad_data

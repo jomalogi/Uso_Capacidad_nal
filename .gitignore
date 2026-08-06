@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.env
+
+# Data
+*.csv
+*.xlsx
+
+# Cookies
+exportar_cookies_pc/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backups y versiones viejas
+app_original.py
+github_app.py
+*.bak-*
+
+# Backups y versiones antiguas
+*.bak
+*.bak-*
+app_original.py
+github_app.py

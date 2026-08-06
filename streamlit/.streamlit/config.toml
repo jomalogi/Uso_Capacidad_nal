@@ -1,0 +1,10 @@
+[server]
+maxUploadSize = 500
+maxMessageSize = 500
+enableXsrfProtection = false
+enableCORS = false
+headless = true
+port = 8501
+
+[browser]
+gatherUsageStats = false
