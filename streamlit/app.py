@@ -581,32 +581,17 @@ FRANJAS_MAP = {
 }
 
 # ── CARGA ─────────────────────────────────────────────────────────────────────
-@st.cache_data(ttl=300)
-def obtener_ultima_carga():
-    try:
-        conn = mysql.connector.connect(**DB)
-        cur = conn.cursor()
-        cur.execute("SELECT MAX(fecha_carga) FROM uso_cupos")
-        r = cur.fetchone()[0]
-        cur.close()
-        conn.close()
-        return r - timedelta(hours=5) if r else None
-    except Exception:
-        return None
 
-@st.cache_data(ttl=300)
-def cargar_datos():
-    ...
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=3600)
 def cargar_datos():
     try:
         conn = mysql.connector.connect(**DB)
         df = pd.read_sql("""
-            SELECT fecha, zona, franja_horaria, categoria,
+            SELECT fecha, TRIM(zona) AS zona, TRIM(franja_horaria) AS franja_horaria,
+                   TRIM(categoria) AS categoria,
                    quota_pct, used_quota_pct, status, close_time,
                    max_available, quota_mins, booked_activities, used
             FROM uso_cupos
-            ORDER BY fecha DESC, zona, franja_horaria, categoria
         """, conn)
         cur = conn.cursor()
         cur.execute("SELECT MAX(fecha_carga) FROM uso_cupos")
@@ -623,9 +608,6 @@ def enriquecer(df):
         return df
 
     df = df.copy()
-    df["zona"]           = df["zona"].str.strip()
-    df["categoria"]      = df["categoria"].str.strip()
-    df["franja_horaria"] = df["franja_horaria"].str.strip()
 
     min_d  = dict(zip(TRABAJOS["Trabajo"].str.strip(), TRABAJOS["Minutos"]))
     red_d  = dict(zip(TRABAJOS["Trabajo"].str.strip(), TRABAJOS["Red"]))
@@ -687,7 +669,7 @@ section[data-testid="stSidebar"] *{color:#1a1816 !important;font-family:'Segoe U
 """, unsafe_allow_html=True)
 
 # ── INICIALIZAR ───────────────────────────────────────────────────────────────
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=3600)
 def obtener_ultima_carga():
     try:
         conn = mysql.connector.connect(**DB)
@@ -698,7 +680,7 @@ def obtener_ultima_carga():
         return r - timedelta(hours=5) if r else None
     except Exception:
         return None
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=3600)
 def cargar_y_enriquecer_datos():
     raw_d, err, ult_act = cargar_datos()
     if err:
