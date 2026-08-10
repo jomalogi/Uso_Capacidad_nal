@@ -778,8 +778,11 @@ with st.sidebar:
         options=sorted(df["Gerencia"].dropna().unique()) if not df.empty and "Gerencia" in df.columns else [],
         default=[], placeholder="Todos", label_visibility="collapsed")
 
+
     st.markdown("**⚠️ Uso Capacidad**")
     uso_menor_50 = st.checkbox("Mostrar solo ciudades < 50%", value=False)
+    ocultar_sin_cupos = st.checkbox("Ocultar ciudades sin cupos abiertos", value=True)
+    st.markdown("---")
 
     st.markdown("---")
 
@@ -804,7 +807,7 @@ else:
 
 # ── FILTROS POR PÁGINA (del PBIX) ────────────────────────────────────────────
 FILTROS_PAGINA = {
-    "Meta Modernización": {
+    "Brownfield": {
         "Tipo_Orden":         ["Bronwfield"],
         "Meta_Modernizacion": ["Si"],
     },
@@ -906,21 +909,22 @@ def render_pagina(df_full, titulo, filtro_extra=None, aplicar_filtro_uso=False, 
         Li=("Cupos_Libres",   "sum"),
         UM=("used_mins",      "sum"),
         QM=("quota_mins_num", "sum"),
+        Cerr=("status", lambda s: (s.astype(str).str.strip().str.lower() == "close").any()),
     )
     agg["fd"] = agg["fecha"].dt.date
 
     reg_agg = agg.groupby(["Regional", "fd"], as_index=False).agg(
         Ab=("Ab", "sum"), Us=("Us", "sum"), Li=("Li", "sum"),
-        UM=("UM", "sum"), QM=("QM", "sum"))
+        UM=("UM", "sum"), QM=("QM", "sum"), Cerr=("Cerr", "any"))
     ger_agg = agg.groupby(["Regional", "Gerencia", "fd"], as_index=False).agg(
         Ab=("Ab", "sum"), Us=("Us", "sum"), Li=("Li", "sum"),
-        UM=("UM", "sum"), QM=("QM", "sum"))
+        UM=("UM", "sum"), QM=("QM", "sum"), Cerr=("Cerr", "any"))
     ciu_agg = agg.groupby(["Regional", "Gerencia", "zona", "fd"], as_index=False).agg(
         Ab=("Ab", "sum"), Us=("Us", "sum"), Li=("Li", "sum"),
-        UM=("UM", "sum"), QM=("QM", "sum"))
+        UM=("UM", "sum"), QM=("QM", "sum"), Cerr=("Cerr", "any"))
     tot_agg = agg.groupby("fd", as_index=False).agg(
         Ab=("Ab", "sum"), Us=("Us", "sum"), Li=("Li", "sum"),
-        UM=("UM", "sum"), QM=("QM", "sum"))
+        UM=("UM", "sum"), QM=("QM", "sum"), Cerr=("Cerr", "any"))
 
     def get_met(src, keys):
         s = src
@@ -958,7 +962,7 @@ def render_pagina(df_full, titulo, filtro_extra=None, aplicar_filtro_uso=False, 
 
     STICKY = "position:sticky;left:0;z-index:2;"
 
-    def cells_html(mets, bold=False, is_total=False, txt="#1a1816", bg="transparent"):
+    def cells_html(mets, bold=False, is_total=False, txt="#1a1816", bg="transparent", cerrada=False):
         h = ""
         total_uso = mets[-1][3] if mets else 0
         for i,(a,u,l,uso) in enumerate(mets):
@@ -974,7 +978,12 @@ def render_pagina(df_full, titulo, filtro_extra=None, aplicar_filtro_uso=False, 
                 f'<td style="{fw}{col}{bgc}text-align:right;padding:5px 10px;white-space:nowrap">{icon}&nbsp;{l:,.0f}</td>'
                 f'<td style="{bgc}padding:5px 8px;min-width:130px">{barra_uso(uso, txt)}</td>'
             )
-        h += f'<td style="{bgc}text-align:center;padding:5px 8px;border-left:1px solid #dde3ec">{uso_icon(total_uso, txt)}</td>'
+        if cerrada:
+            h += (f'<td style="{bgc}text-align:center;padding:5px 8px;'
+                  f'border-left:1px solid #dde3ec;font-size:.68rem;font-weight:700;'
+                  f'color:#cc0000;white-space:nowrap">Cerrada</td>')
+        else:
+            h += f'<td style="{bgc}text-align:center;padding:5px 8px;border-left:1px solid #dde3ec">{uso_icon(total_uso, txt)}</td>'
         return h
 
     nf = len(fechas)
@@ -1052,9 +1061,14 @@ def render_pagina(df_full, titulo, filtro_extra=None, aplicar_filtro_uso=False, 
             )
 
             ciudades = sorted(d[(d["Regional"]==reg) & (d["Gerencia"]==ger)]["zona"].dropna().unique())
+            if ocultar_sin_cupos:
+                ciudades = [c for c in ciudades
+                            if ciu_agg[(ciu_agg["Regional"]==reg) & (ciu_agg["Gerencia"]==ger)
+                                       & (ciu_agg["zona"]==c)]["Ab"].sum() > 0]
             for ci, ciu in enumerate(ciudades):
                 cm     = cells_html(get_met(ciu_agg, {"Regional": reg, "Gerencia": ger, "zona": ciu}),
-                                    txt="#333344")
+                                    txt="#333344",
+                                    cerrada=bool(ciu_agg[(ciu_agg["Regional"]==reg) & (ciu_agg["Gerencia"]==ger) & (ciu_agg["zona"]==ciu)]["Cerr"].any()))
                 bg_ciu = "#ffffff" if ci % 2 == 0 else "#f5f7fc"
                 body += (
                     f'<tr class="sub_{rid} c_{gid}" '
