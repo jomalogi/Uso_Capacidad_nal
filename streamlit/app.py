@@ -202,7 +202,9 @@ def render_carga_datos():
                             st.code(ed)
                     else:
                         st.success(f"¡Éxito! Se guardaron {ins} nuevos registros.")
-                    st.cache_data.clear()
+                    cargar_datos.clear()
+                    obtener_ultima_carga.clear()
+                    st.rerun()
                 except Exception as e:
                     import traceback
                     st.error(f"Error procesando el archivo: {str(e)}")
@@ -582,7 +584,7 @@ FRANJAS_MAP = {
 
 # ── CARGA ─────────────────────────────────────────────────────────────────────
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=60)
 def cargar_datos():
     try:
         conn = mysql.connector.connect(**DB)
@@ -1567,30 +1569,24 @@ def render_reporting(df_full):
 # ── VISTAS ────────────────────────────────────────────────────────────────────
 _ultima = obtener_ultima_carga()
 if _ultima:
-    _ahora = (datetime.now() - timedelta(hours=5)).strftime('%Y-%m-%d %H:%M')
-    st.markdown(
-        f"""<div style="background:#fff;border-left:5px solid #e30613;border-radius:10px;
-        padding:16px 24px;margin-bottom:18px;box-shadow:0 2px 8px rgba(0,0,0,.06);
-        display:flex;align-items:center;justify-content:space-between;">
-          <div style="font-size:20px;font-weight:700;color:#1a1816;letter-spacing:.3px;">
-            Uso de la Capacidad en Cupos
-          </div>
-          <div style="background:#f7f8fa;border-radius:10px;padding:10px 18px;
-          font-size:12.5px;line-height:1.8;color:#5a5a5a;">
-            ⏱️ <b style="color:#3c3c3c;">Actualizado:</b> <span style="color:#e30613;">{_ahora} (COT)</span><br>
-            <b style="color:#3c3c3c;">Última carga:</b> <span style="color:#e30613;">{_ultima.strftime('%Y-%m-%d %H:%M')}</span>
-          </div>
-        </div>""",
-        unsafe_allow_html=True
-    )
+    _c1, _c2 = st.columns([2, 1])
+    with _c2:
+        st.markdown(
+            f"""<div style="background:#fff;border-radius:14px;padding:14px 20px;
+            box-shadow:0 2px 10px rgba(0,0,0,.07);font-size:13px;line-height:1.7;
+            color:#3c3c3c;">
+            ⏱️ <b>Actualizado:</b> <span style="color:#e30613;">
+            {_ultima.strftime('%Y-%m-%d %H:%M')} (COT)</span>
+            </div>""",
+            unsafe_allow_html=True
+        )
 
 
 tabs_keys = ["📊 Reporting"] + list(FILTROS_PAGINA.keys()) + ["Carga de Cuotas (ETL)"]
 
-tabs = st.tabs(tabs_keys)
-
-for tab, pag in zip(tabs, tabs_keys):
-    with tab:
+pag = st.radio("Vista", tabs_keys, horizontal=True,
+               label_visibility="collapsed", key="pag_activa")
+if True:
         if pag == "Carga de Cuotas (ETL)" or pag == "Carga de Datos":
             render_carga_datos()
 
