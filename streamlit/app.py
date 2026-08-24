@@ -396,6 +396,7 @@ TABLA_FTTH = pd.DataFrame([
     ("Girardota DOMINION",                        "R2", "DOMINION",     "MEDELLIN"),
     ("Medellin DOMINION",                         "R2", "DOMINION",     "MEDELLIN"),
     ("Yarumal DOMINION",                          "R2", "DOMINION",     "MEDELLIN"),
+    ("La Tebaida",                                "R2", "SICTE",        "EJE CAFETERO"),
     # R5
     ("R5-Acacias TELCOS",                         "R5", "Telcos",       "Cunmenal"),
     ("R5-Aguazul TELCOS",                         "R5", "Telcos",       "Cunmenal"),
@@ -449,6 +450,10 @@ TABLA_FTTH = pd.DataFrame([
     ("Villeta",                                   "R5", "Tabasco",      "Cunmenal"),
     ("R5-Yopal TELCOS",                           "R5", "Telcos",       "Cunmenal"),
     ("VILLANUEVA",                                "R5", "Telcos",       "Cunmenal"),
+    ("Apulo",                                     "R5", "Tabasco",      "Cunmenal"),
+    ("GRUPO X",                                   "R5", "Telcos",       "Cunmenal"),
+    ("Miraflores Casanare",                       "R5", "Telcos",       "Cunmenal"),
+    ("Quebrada Negra",                            "R5", "Tabasco",      "Cunmenal"),
     # R3 Cali
     ("CALI NORTE CONECTAR",                       "R3", "Conectar TV",  "CALI"),
     ("CALI SUR CICSA",                            "R3", "Tabasco",      "CALI"),
