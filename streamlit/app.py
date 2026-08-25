@@ -589,7 +589,19 @@ FRANJAS_MAP = {
 
 # ── CARGA ─────────────────────────────────────────────────────────────────────
 
-@st.cache_data(ttl=60)
+def obtener_fechas_bd():
+    try:
+        conn = mysql.connector.connect(**DB)
+        cur = conn.cursor()
+        cur.execute("SELECT DISTINCT fecha FROM uso_cupos ORDER BY fecha DESC")
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        return [r[0] for r in rows]
+    except Exception:
+        return []
+@st.cache_data(ttl=3600)       
+
 def cargar_datos():
     try:
         conn = mysql.connector.connect(**DB)
@@ -702,7 +714,7 @@ if error:
 if df.empty:
     st.warning("⚠️ Sin datos en la BD. Dirígete a la pestaña 'Carga de Cuotas (ETL)' para subir tu primer archivo Excel.")
 
-fechas_disp = sorted(df["fecha"].dt.date.unique(), reverse=True) if not df.empty else []
+fechas_disp = obtener_fechas_bd()
 
 MESES_NUM = {1:"Enero",2:"Febrero",3:"Marzo",4:"Abril",5:"Mayo",6:"Junio",
              7:"Julio",8:"Agosto",9:"Septiembre",10:"Octubre",11:"Noviembre",12:"Diciembre"}
