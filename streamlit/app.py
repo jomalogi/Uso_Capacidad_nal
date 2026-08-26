@@ -600,7 +600,7 @@ def obtener_fechas_bd():
         return [r[0] for r in rows]
     except Exception:
         return []
-@st.cache_data(ttl=3600)       
+@st.cache_data(ttl=300)       
 
 def cargar_datos():
     try:
