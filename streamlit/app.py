@@ -204,6 +204,7 @@ def render_carga_datos():
                         st.success(f"¡Éxito! Se guardaron {ins} nuevos registros.")
                     cargar_datos.clear()
                     obtener_ultima_carga.clear()
+                    cargar_y_enriquecer_datos.clear()
                     st.rerun()
                 except Exception as e:
                     import traceback
