@@ -87,6 +87,7 @@ def transformar_excel(content):
             })
 
     df = pd.DataFrame(rows)
+    df["fecha"]      = pd.to_datetime(df["fecha"], errors="coerce").dt.date
     df["close_time"] = pd.to_datetime(df["close_time"], errors="coerce")
     if not df.empty:
         df = df.drop_duplicates(subset=["fecha", "zona", "franja_horaria", "categoria"], keep="first")
@@ -156,22 +157,11 @@ def render_carga_datos():
                         df_new = df_new.drop_duplicates(subset=["fecha", "zona", "franja_horaria", "categoria"], keep="first")
                     
                     records = df_new.where(pd.notna(df_new), other=None).to_dict("records")
-
-                    def _limpiar(v):
-                        if v is None:
-                            return None
-                        if isinstance(v, pd.Timestamp):
-                            return None if pd.isna(v) else v.to_pydatetime()
-                        try:
-                            if pd.isna(v):
-                                return None
-                        except (TypeError, ValueError):
-                            pass
-                        if hasattr(v, "item"):
-                            return v.item()
-                        return v
-
-                    clean_records = [{k: _limpiar(v) for k, v in rec.items()} for rec in records]
+                    clean_records = []
+                    for rec in records:
+                        clean = {k: (None if v is not None and (str(v) == 'nan' or str(v) == 'NaT') else v)
+                                 for k, v in rec.items()}
+                        clean_records.append(clean)
 
                     # Inserción masiva por lotes
                     chunk_size = 5000
@@ -202,10 +192,7 @@ def render_carga_datos():
                             st.code(ed)
                     else:
                         st.success(f"¡Éxito! Se guardaron {ins} nuevos registros.")
-                    cargar_datos.clear()
-                    obtener_ultima_carga.clear()
-                    cargar_y_enriquecer_datos.clear()
-                    st.rerun()
+                    st.cache_data.clear()
                 except Exception as e:
                     import traceback
                     st.error(f"Error procesando el archivo: {str(e)}")
@@ -225,7 +212,7 @@ DB_HOST = os.environ.get("DB_HOST", "ofsc_cupos_db")
 DB_PORT = int(os.environ.get("DB_PORT", 3306))
 
 DB = dict(host=DB_HOST, port=DB_PORT, database="ofsc_cupos",
-          user="ofsc_user", password=os.environ.get("DB_PASSWORD", ""), connection_timeout=30)
+          user="ofsc_user", password="Capacidades*", connection_timeout=30)
 
 # ── TABLA DE TRABAJOS ─────────────────────────────────────────────────────────
 TRABAJOS = pd.DataFrame([
@@ -397,7 +384,6 @@ TABLA_FTTH = pd.DataFrame([
     ("Girardota DOMINION",                        "R2", "DOMINION",     "MEDELLIN"),
     ("Medellin DOMINION",                         "R2", "DOMINION",     "MEDELLIN"),
     ("Yarumal DOMINION",                          "R2", "DOMINION",     "MEDELLIN"),
-    ("La Tebaida",                                "R2", "SICTE",        "EJE CAFETERO"),
     # R5
     ("R5-Acacias TELCOS",                         "R5", "Telcos",       "Cunmenal"),
     ("R5-Aguazul TELCOS",                         "R5", "Telcos",       "Cunmenal"),
@@ -451,10 +437,6 @@ TABLA_FTTH = pd.DataFrame([
     ("Villeta",                                   "R5", "Tabasco",      "Cunmenal"),
     ("R5-Yopal TELCOS",                           "R5", "Telcos",       "Cunmenal"),
     ("VILLANUEVA",                                "R5", "Telcos",       "Cunmenal"),
-    ("Apulo",                                     "R5", "Tabasco",      "Cunmenal"),
-    ("GRUPO X",                                   "R5", "Telcos",       "Cunmenal"),
-    ("Miraflores Casanare",                       "R5", "Telcos",       "Cunmenal"),
-    ("Quebrada Negra",                            "R5", "Tabasco",      "Cunmenal"),
     # R3 Cali
     ("CALI NORTE CONECTAR",                       "R3", "Conectar TV",  "CALI"),
     ("CALI SUR CICSA",                            "R3", "Tabasco",      "CALI"),
@@ -589,29 +571,16 @@ FRANJAS_MAP = {
 }
 
 # ── CARGA ─────────────────────────────────────────────────────────────────────
-
-def obtener_fechas_bd():
-    try:
-        conn = mysql.connector.connect(**DB)
-        cur = conn.cursor()
-        cur.execute("SELECT DISTINCT fecha FROM uso_cupos ORDER BY fecha DESC")
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-        return [r[0] for r in rows]
-    except Exception:
-        return []
-@st.cache_data(ttl=300)       
-
+@st.cache_data(ttl=300)
 def cargar_datos():
     try:
         conn = mysql.connector.connect(**DB)
         df = pd.read_sql("""
-            SELECT fecha, TRIM(zona) AS zona, TRIM(franja_horaria) AS franja_horaria,
-                   TRIM(categoria) AS categoria,
+            SELECT fecha, zona, franja_horaria, categoria,
                    quota_pct, used_quota_pct, status, close_time,
                    max_available, quota_mins, booked_activities, used
             FROM uso_cupos
+            ORDER BY fecha DESC, zona, franja_horaria, categoria
         """, conn)
         cur = conn.cursor()
         cur.execute("SELECT MAX(fecha_carga) FROM uso_cupos")
@@ -628,6 +597,9 @@ def enriquecer(df):
         return df
 
     df = df.copy()
+    df["zona"]           = df["zona"].str.strip()
+    df["categoria"]      = df["categoria"].str.strip()
+    df["franja_horaria"] = df["franja_horaria"].str.strip()
 
     min_d  = dict(zip(TRABAJOS["Trabajo"].str.strip(), TRABAJOS["Minutos"]))
     red_d  = dict(zip(TRABAJOS["Trabajo"].str.strip(), TRABAJOS["Red"]))
@@ -689,18 +661,7 @@ section[data-testid="stSidebar"] *{color:#1a1816 !important;font-family:'Segoe U
 """, unsafe_allow_html=True)
 
 # ── INICIALIZAR ───────────────────────────────────────────────────────────────
-@st.cache_data(ttl=3600)
-def obtener_ultima_carga():
-    try:
-        conn = mysql.connector.connect(**DB)
-        cur = conn.cursor()
-        cur.execute("SELECT MAX(fecha_carga) FROM uso_cupos")
-        r = cur.fetchone()[0]
-        cur.close(); conn.close()
-        return r - timedelta(hours=5) if r else None
-    except Exception:
-        return None
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=300)
 def cargar_y_enriquecer_datos():
     raw_d, err, ult_act = cargar_datos()
     if err:
@@ -715,7 +676,7 @@ if error:
 if df.empty:
     st.warning("⚠️ Sin datos en la BD. Dirígete a la pestaña 'Carga de Cuotas (ETL)' para subir tu primer archivo Excel.")
 
-fechas_disp = obtener_fechas_bd()
+fechas_disp = sorted(df["fecha"].dt.date.unique(), reverse=True) if not df.empty else []
 
 MESES_NUM = {1:"Enero",2:"Febrero",3:"Marzo",4:"Abril",5:"Mayo",6:"Junio",
              7:"Julio",8:"Agosto",9:"Septiembre",10:"Octubre",11:"Noviembre",12:"Diciembre"}
@@ -798,11 +759,8 @@ with st.sidebar:
         options=sorted(df["Gerencia"].dropna().unique()) if not df.empty and "Gerencia" in df.columns else [],
         default=[], placeholder="Todos", label_visibility="collapsed")
 
-
     st.markdown("**⚠️ Uso Capacidad**")
     uso_menor_50 = st.checkbox("Mostrar solo ciudades < 50%", value=False)
-    ocultar_sin_cupos = st.checkbox("Ocultar ciudades sin cupos abiertos", value=True)
-    st.markdown("---")
 
     st.markdown("---")
 
@@ -827,7 +785,7 @@ else:
 
 # ── FILTROS POR PÁGINA (del PBIX) ────────────────────────────────────────────
 FILTROS_PAGINA = {
-    "Brownfield": {
+    "Meta Modernización": {
         "Tipo_Orden":         ["Bronwfield"],
         "Meta_Modernizacion": ["Si"],
     },
@@ -929,22 +887,21 @@ def render_pagina(df_full, titulo, filtro_extra=None, aplicar_filtro_uso=False, 
         Li=("Cupos_Libres",   "sum"),
         UM=("used_mins",      "sum"),
         QM=("quota_mins_num", "sum"),
-        Cerr=("status", lambda s: (s.astype(str).str.strip().str.lower() == "close").any()),
     )
     agg["fd"] = agg["fecha"].dt.date
 
     reg_agg = agg.groupby(["Regional", "fd"], as_index=False).agg(
         Ab=("Ab", "sum"), Us=("Us", "sum"), Li=("Li", "sum"),
-        UM=("UM", "sum"), QM=("QM", "sum"), Cerr=("Cerr", "any"))
+        UM=("UM", "sum"), QM=("QM", "sum"))
     ger_agg = agg.groupby(["Regional", "Gerencia", "fd"], as_index=False).agg(
         Ab=("Ab", "sum"), Us=("Us", "sum"), Li=("Li", "sum"),
-        UM=("UM", "sum"), QM=("QM", "sum"), Cerr=("Cerr", "any"))
+        UM=("UM", "sum"), QM=("QM", "sum"))
     ciu_agg = agg.groupby(["Regional", "Gerencia", "zona", "fd"], as_index=False).agg(
         Ab=("Ab", "sum"), Us=("Us", "sum"), Li=("Li", "sum"),
-        UM=("UM", "sum"), QM=("QM", "sum"), Cerr=("Cerr", "any"))
+        UM=("UM", "sum"), QM=("QM", "sum"))
     tot_agg = agg.groupby("fd", as_index=False).agg(
         Ab=("Ab", "sum"), Us=("Us", "sum"), Li=("Li", "sum"),
-        UM=("UM", "sum"), QM=("QM", "sum"), Cerr=("Cerr", "any"))
+        UM=("UM", "sum"), QM=("QM", "sum"))
 
     def get_met(src, keys):
         s = src
@@ -960,10 +917,10 @@ def render_pagina(df_full, titulo, filtro_extra=None, aplicar_filtro_uso=False, 
             else:
                 a = row["Ab"]; u = row["Us"]; l = row["Li"]
                 um = row["UM"]; qm = row["QM"]
-                uso = max(round(um / qm, 2) if qm > 0 else 0, 0)
+                uso = max((a - l) / a if a > 0 else 0, 0)
                 data.append((a, u, l, uso))
                 ta += a; tu += u; tl += l; tum += um; tqm += qm
-        uso_tot = max(round(tum / tqm, 2) if tqm > 0 else 0, 0)
+        uso_tot = max((ta - tl) / ta if ta > 0 else 0, 0)
         data.append((ta, tu, tl, uso_tot))
         return data
 
@@ -982,7 +939,7 @@ def render_pagina(df_full, titulo, filtro_extra=None, aplicar_filtro_uso=False, 
 
     STICKY = "position:sticky;left:0;z-index:2;"
 
-    def cells_html(mets, bold=False, is_total=False, txt="#1a1816", bg="transparent", cerrada=False):
+    def cells_html(mets, bold=False, is_total=False, txt="#1a1816", bg="transparent"):
         h = ""
         total_uso = mets[-1][3] if mets else 0
         for i,(a,u,l,uso) in enumerate(mets):
@@ -998,12 +955,7 @@ def render_pagina(df_full, titulo, filtro_extra=None, aplicar_filtro_uso=False, 
                 f'<td style="{fw}{col}{bgc}text-align:right;padding:5px 10px;white-space:nowrap">{icon}&nbsp;{l:,.0f}</td>'
                 f'<td style="{bgc}padding:5px 8px;min-width:130px">{barra_uso(uso, txt)}</td>'
             )
-        if cerrada:
-            h += (f'<td style="{bgc}text-align:center;padding:5px 8px;'
-                  f'border-left:1px solid #dde3ec;font-size:.68rem;font-weight:700;'
-                  f'color:#cc0000;white-space:nowrap">Cerrada</td>')
-        else:
-            h += f'<td style="{bgc}text-align:center;padding:5px 8px;border-left:1px solid #dde3ec">{uso_icon(total_uso, txt)}</td>'
+        h += f'<td style="{bgc}text-align:center;padding:5px 8px;border-left:1px solid #dde3ec">{uso_icon(total_uso, txt)}</td>'
         return h
 
     nf = len(fechas)
@@ -1081,14 +1033,9 @@ def render_pagina(df_full, titulo, filtro_extra=None, aplicar_filtro_uso=False, 
             )
 
             ciudades = sorted(d[(d["Regional"]==reg) & (d["Gerencia"]==ger)]["zona"].dropna().unique())
-            if ocultar_sin_cupos:
-                ciudades = [c for c in ciudades
-                            if ciu_agg[(ciu_agg["Regional"]==reg) & (ciu_agg["Gerencia"]==ger)
-                                       & (ciu_agg["zona"]==c)]["Ab"].sum() > 0]
             for ci, ciu in enumerate(ciudades):
                 cm     = cells_html(get_met(ciu_agg, {"Regional": reg, "Gerencia": ger, "zona": ciu}),
-                                    txt="#333344",
-                                    cerrada=bool(ciu_agg[(ciu_agg["Regional"]==reg) & (ciu_agg["Gerencia"]==ger) & (ciu_agg["zona"]==ciu)]["Cerr"].any()))
+                                    txt="#333344")
                 bg_ciu = "#ffffff" if ci % 2 == 0 else "#f5f7fc"
                 body += (
                     f'<tr class="sub_{rid} c_{gid}" '
@@ -1106,12 +1053,12 @@ def render_pagina(df_full, titulo, filtro_extra=None, aplicar_filtro_uso=False, 
         else:
             a=fr["Ab"].sum(); u=fr["Us"].sum(); l=fr["Li"].sum()
             um=fr["UM"].sum(); qm=fr["QM"].sum()
-            uso = round(u / a, 2) if a > 0 else 0
+            uso = (a - l) / a if a > 0 else 0
             if uso < 0: uso = 0
             tm.append((a,u,l,uso))
             ta+=a; tu+=u; tl+=l; tum+=um; tqm+=qm
 
-    uso_tot = round(tu / ta, 2) if ta > 0 else 0
+    uso_tot = (ta - tl) / ta if ta > 0 else 0
     if uso_tot < 0: uso_tot = 0
     tm.append((ta,tu,tl,uso_tot))
 
@@ -1313,7 +1260,7 @@ def render_reporting(df_full):
         quota_mins=("quota_mins_num", "sum"),
     )
     daily["Uso_Pct"] = daily.apply(
-        lambda r: round(r["Usados"] / r["Abiertos"] * 100, 1) if r["Abiertos"] > 0 else 0, axis=1
+        lambda r: round((r["Abiertos"] - r["Libres"]) / r["Abiertos"] * 100, 1) if r["Abiertos"] > 0 else 0, axis=1
     )
     daily = daily.sort_values("fecha_d")
     # ── Solo fecha, sin horas ──────────────────────────────────────────────────
@@ -1583,28 +1530,13 @@ def render_reporting(df_full):
 
 
 
-
 # ── VISTAS ────────────────────────────────────────────────────────────────────
-_ultima = obtener_ultima_carga()
-if _ultima:
-    _c1, _c2 = st.columns([2, 1])
-    with _c2:
-        st.markdown(
-            f"""<div style="background:#fff;border-radius:14px;padding:14px 20px;
-            box-shadow:0 2px 10px rgba(0,0,0,.07);font-size:13px;line-height:1.7;
-            color:#3c3c3c;">
-            ⏱️ <b>Actualizado:</b> <span style="color:#e30613;">
-            {_ultima.strftime('%Y-%m-%d %H:%M')} (COT)</span>
-            </div>""",
-            unsafe_allow_html=True
-        )
-
-
 tabs_keys = ["📊 Reporting"] + list(FILTROS_PAGINA.keys()) + ["Carga de Cuotas (ETL)"]
 
-pag = st.radio("Vista", tabs_keys, horizontal=True,
-               label_visibility="collapsed", key="pag_activa")
-if True:
+tabs = st.tabs(tabs_keys)
+
+for tab, pag in zip(tabs, tabs_keys):
+    with tab:
         if pag == "Carga de Cuotas (ETL)" or pag == "Carga de Datos":
             render_carga_datos()
 
