@@ -191,12 +191,15 @@ def render_carga_datos():
                         for ed in errores_detalle:
                             st.code(ed)
                     else:
-                        st.success(f"¡Éxito! Se guardaron {ins} nuevos registros.")
+                        st.session_state["carga_exitosa"] = f"¡Éxito! Se guardaron {ins} nuevos registros. Fechas actualizadas: {', '.join(fechas_nuevas)}"
                     st.cache_data.clear()
+                    st.rerun()
                 except Exception as e:
                     import traceback
                     st.error(f"Error procesando el archivo: {str(e)}")
                     st.code(traceback.format_exc())
+
+
 
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -206,13 +209,20 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+if "carga_exitosa" in st.session_state:
+    st.success(st.session_state["carga_exitosa"])
+    if st.button("Ocultar mensaje"):
+        del st.session_state["carga_exitosa"]
+        st.rerun()
+
+
 import os
 
 DB_HOST = os.environ.get("DB_HOST", "ofsc_cupos_db")
 DB_PORT = int(os.environ.get("DB_PORT", 3306))
 
 DB = dict(host=DB_HOST, port=DB_PORT, database="ofsc_cupos",
-          user="ofsc_user", password="Capacidades*", connection_timeout=30)
+          user="ofsc_user", password=os.environ.get("DB_PASSWORD", "UserClaro2026"), connection_timeout=30)
 
 # ── TABLA DE TRABAJOS ─────────────────────────────────────────────────────────
 TRABAJOS = pd.DataFrame([
@@ -785,7 +795,7 @@ else:
 
 # ── FILTROS POR PÁGINA (del PBIX) ────────────────────────────────────────────
 FILTROS_PAGINA = {
-    "Meta Modernización": {
+    "Brownfield": {
         "Tipo_Orden":         ["Bronwfield"],
         "Meta_Modernizacion": ["Si"],
     },
@@ -917,10 +927,10 @@ def render_pagina(df_full, titulo, filtro_extra=None, aplicar_filtro_uso=False, 
             else:
                 a = row["Ab"]; u = row["Us"]; l = row["Li"]
                 um = row["UM"]; qm = row["QM"]
-                uso = max((a - l) / a if a > 0 else 0, 0)
+                a_int = int(round(a)); l_int = int(round(l)); uso = max((a_int - l_int) / a_int if a_int > 0 else 0, 0)
                 data.append((a, u, l, uso))
                 ta += a; tu += u; tl += l; tum += um; tqm += qm
-        uso_tot = max((ta - tl) / ta if ta > 0 else 0, 0)
+        ta_int = int(round(ta)); tl_int = int(round(tl)); uso_tot = max((ta_int - tl_int) / ta_int if ta_int > 0 else 0, 0)
         data.append((ta, tu, tl, uso_tot))
         return data
 
@@ -1053,13 +1063,13 @@ def render_pagina(df_full, titulo, filtro_extra=None, aplicar_filtro_uso=False, 
         else:
             a=fr["Ab"].sum(); u=fr["Us"].sum(); l=fr["Li"].sum()
             um=fr["UM"].sum(); qm=fr["QM"].sum()
-            uso = (a - l) / a if a > 0 else 0
-            if uso < 0: uso = 0
+            a_int = int(round(a)); l_int = int(round(l)); uso = max((a_int - l_int) / a_int if a_int > 0 else 0, 0)
             tm.append((a,u,l,uso))
             ta+=a; tu+=u; tl+=l; tum+=um; tqm+=qm
 
-    uso_tot = (ta - tl) / ta if ta > 0 else 0
-    if uso_tot < 0: uso_tot = 0
+    ta_int = int(round(ta))
+    tl_int = int(round(tl))
+    uso_tot = max((ta_int - tl_int) / ta_int if ta_int > 0 else 0, 0)
     tm.append((ta,tu,tl,uso_tot))
 
     body += (f'<tr style="background:#ddeeff;border-top:3px solid #5599cc">'
