@@ -186,10 +186,9 @@ def render_carga_datos():
                     conn.close()
 
                     if err > 0:
-                        st.error(f"Se guardaron {ins} registros con {err} errores.")
-                        st.warning("Muestra de los primeros 5 errores:")
-                        for ed in errores_detalle:
-                            st.code(ed)
+                        msg = f"Se guardaron {ins} registros con {err} errores. Fechas: {', '.join(fechas_nuevas)}"
+                        st.session_state["carga_exitosa"] = msg
+                        st.session_state["carga_errores"] = errores_detalle
                     else:
                         st.session_state["carga_exitosa"] = f"¡Éxito! Se guardaron {ins} nuevos registros. Fechas actualizadas: {', '.join(fechas_nuevas)}"
                     st.cache_data.clear()
@@ -210,9 +209,18 @@ st.set_page_config(
 )
 
 if "carga_exitosa" in st.session_state:
-    st.success(st.session_state["carga_exitosa"])
+    if "carga_errores" in st.session_state and st.session_state["carga_errores"]:
+        st.warning(st.session_state["carga_exitosa"])
+        with st.expander("Ver detalles de errores"):
+            for ed in st.session_state["carga_errores"]:
+                st.code(ed)
+    else:
+        st.success(st.session_state["carga_exitosa"])
+        
     if st.button("Ocultar mensaje"):
         del st.session_state["carga_exitosa"]
+        if "carga_errores" in st.session_state:
+            del st.session_state["carga_errores"]
         st.rerun()
 
 
