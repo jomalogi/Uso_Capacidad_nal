@@ -1543,6 +1543,25 @@ def render_reporting(df_full):
 # ── VISTAS ────────────────────────────────────────────────────────────────────
 tabs_keys = ["📊 Reporting"] + list(FILTROS_PAGINA.keys()) + ["Carga de Cuotas (ETL)"]
 
+if ultima_actualizacion:
+    ts = pd.to_datetime(ultima_actualizacion)
+    ts = ts - timedelta(hours=5)
+    actualizado_str = ts.strftime('%Y-%m-%d %H:%M')
+    ultima_fecha_datos = df["fecha"].max().strftime('%Y-%m-%d') if not df.empty else "N/A"
+
+    tarjeta_html = f"""
+    <div style="display:flex; justify-content:flex-end; margin-bottom: 5px;">
+        <div style="border: 1px solid #eaeaea; border-radius: 6px; padding: 10px 15px; background-color: #fcfcfc; display: flex; align-items: center; gap: 12px; font-size: 0.85rem; color: #444; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <div style="font-size: 1.4rem; line-height: 1;">⏱️</div>
+            <div style="line-height: 1.4;">
+                <span style="color:#1a3a6f; font-weight:600;">Actualizado:</span> {actualizado_str} (COT)<br>
+                <span style="color:#1a3a6f; font-weight:600;">Última carga:</span> {ultima_fecha_datos}
+            </div>
+        </div>
+    </div>
+    """
+    st.markdown(tarjeta_html, unsafe_allow_html=True)
+
 tabs = st.tabs(tabs_keys)
 
 for tab, pag in zip(tabs, tabs_keys):
@@ -1563,13 +1582,7 @@ for tab, pag in zip(tabs, tabs_keys):
                 flt = FILTROS_PAGINA[pag]
                 st.markdown(f"<div class='page-header'><h2>{pag.upper()}</h2></div>", unsafe_allow_html=True)
                 
-                # Resumen de última carga
-                if ultima_actualizacion:
-                    ts = pd.to_datetime(ultima_actualizacion)
-                    ts = ts - timedelta(hours=5)
-                    ts_str = ts.strftime('%d/%m/%Y %I:%M %p')
-                    st.markdown(f"<div class='page-sub'>Última actualización BD: {ts_str} (Hora Colombia)</div>", unsafe_allow_html=True)
-                
+
                 # ── Filtro dinámico solo para Total Trabajos ──
                 if pag == "Total Trabajos":
                     cats_disponibles = sorted(df["categoria"].dropna().unique())
