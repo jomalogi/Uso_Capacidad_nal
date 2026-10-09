@@ -186,13 +186,13 @@ def render_carga_datos():
                     conn.close()
 
                     if err > 0:
-                        msg = f"Se guardaron {ins} registros con {err} errores. Fechas: {', '.join(fechas_nuevas)}"
-                        st.session_state["carga_exitosa"] = msg
-                        st.session_state["carga_errores"] = errores_detalle
+                        st.warning(f"Se guardaron {ins} registros con {err} errores. Fechas: {', '.join(fechas_nuevas)}")
+                        with st.expander("Ver detalles de errores"):
+                            for ed in errores_detalle:
+                                st.code(ed)
                     else:
-                        st.session_state["carga_exitosa"] = f"¡Éxito! Se guardaron {ins} nuevos registros. Fechas actualizadas: {', '.join(fechas_nuevas)}"
+                        st.success(f"¡Éxito! Se guardaron {ins} nuevos registros. Fechas actualizadas: {', '.join(fechas_nuevas)}")
                     st.cache_data.clear()
-                    st.rerun()
                 except Exception as e:
                     import traceback
                     st.error(f"Error procesando el archivo: {str(e)}")
@@ -208,20 +208,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-if "carga_exitosa" in st.session_state:
-    if "carga_errores" in st.session_state and st.session_state["carga_errores"]:
-        st.warning(st.session_state["carga_exitosa"])
-        with st.expander("Ver detalles de errores"):
-            for ed in st.session_state["carga_errores"]:
-                st.code(ed)
-    else:
-        st.success(st.session_state["carga_exitosa"])
-        
-    if st.button("Ocultar mensaje"):
-        del st.session_state["carga_exitosa"]
-        if "carga_errores" in st.session_state:
-            del st.session_state["carga_errores"]
-        st.rerun()
+
 
 
 import os
